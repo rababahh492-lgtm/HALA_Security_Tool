@@ -1,86 +1,113 @@
 import streamlit as st
+import os
+import tempfile
 import pandas as pd
-from backend.scanner import scan_apk
+import json
+import base64
+import altair as alt
+from backend.scanner import scan_apk  # السكريبت تبعك
 
-st.set_page_config(page_title="HalaScan Dashboard", layout="wide")
 
-st.title("📱 HalaScan Live Dashboard")
-st.write("Upload APK file(s) and get instant security analysis.")
+# Page Config & Branding
 
-uploaded_files = st.file_uploader(
-    "Upload APK file(s)",
-    type=["apk"],
-    accept_multiple_files=True
-)
+st.set_page_config(page_title="HalaScan", layout="wide")
+st.image("logo.png", width=150)
+st.title("🔐 HalaScan Security Dashboard")
+st.markdown("---")
 
-def verdict_color(score):
-    if score >= 70:
-        return "🔴 HIGH RISK"
-    elif score >= 40:
-        return "🟡 MEDIUM RISK"
-    else:
-        return "🟢 LOW RISK"
+# Sidebar
+st.sidebar.image("logo.png", width=120)
+st.sidebar.title("HalaScan")
+st.sidebar.markdown("**Web Vulnerability Scanner**")
+st.sidebar.markdown("---")
 
-def progress_color(score):
-    if score >= 70:
-        return 100  # كامل الحمراء
-    elif score >= 40:
-        return 60   # أصفر
-    else:
-        return 30   # أخضر
+
+# Custom Dark Theme
+
+st.markdown("""
+<style>
+body { background: linear-gradient(135deg, #0e1117, #1e1e2f); color: white; }
+h1, h2, h3 { color: #00ADB5; }
+.card { background:#1e1e1e; padding:10px; border-radius:12px; margin-bottom:8px; }
+</style>
+""", unsafe_allow_html=True)
+
+
+# Upload APK Files
+
+st.subheader("Upload APK Files")
+uploaded_files = st.file_uploader("Choose APK files", type=["apk"], accept_multiple_files=True)
+
+results_table = []
 
 if uploaded_files:
-    results_list = []
+    for uploaded_file in uploaded_files:
+        # Save temp file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".apk") as tmp:
+            tmp.write(uploaded_file.read())
+            temp_path = tmp.name
 
-    if st.button("Analyze All APKs"):
-        for uploaded_file in uploaded_files:
-            temp_path = f"temp_{uploaded_file.name}"
-            with open(temp_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
+        # Scan APK
+        apk_result = scan_apk(temp_path)
 
-            # تحليل بصمت
-            result = scan_apk(temp_path)
-            results_list.append(result)
+        # App Name
+        st.markdown(f"##  {apk_result['name']}")
 
-            # مسح الملف المؤقت
-            try:
-                import os
-                os.remove(temp_path)
-            except:
-                pass
+        # Risk Score
+        score = apk_result.get("risk_score", 0)
+        st.subheader("Risk Score")
+        st.progress(min(score, 100))
+        verdict = apk_result.get("verdict", "LOW RISK")
+        if score >= 50:
+            st.error(f"{verdict}  ({score}/100)")
+        else:
+            st.success(f"{verdict}  ({score}/100)")
 
-        # جدول النتائج
-        df = pd.DataFrame([
-            {
-                "APK Name": r["name"],
-                "Risk Score": r["risk_score"],
-                "Verdict": verdict_color(r["risk_score"]),
-                "Findings": ", ".join([f.get("permission", f.get("info", "")) for f in r["findings"]])
-            }
-            for r in results_list
-        ])
+        # Risk Summary Chart
+        st.subheader("📊 Risk Summary Chart")
+        df_chart = pd.DataFrame({
+            'Type': ['High Risk', 'Low Risk'],
+            'Score': [score, 100 - score]
+        })
+        chart = alt.Chart(df_chart).mark_bar().encode(
+            x='Type', y='Score', color='Type'
+        )
+        st.altair_chart(chart, use_container_width=True)
 
-        st.subheader("📊 Summary Table")
-        st.dataframe(df, use_container_width=True)
+        # Permissions
+        st.subheader(" Permissions")
+        st.json(apk_result.get("permissions", []))
 
-        st.subheader("🔹 Risk Score Chart")
-        st.bar_chart(df.set_index("APK Name")["Risk Score"])
-
-        st.subheader("APK Details")
-        for res in results_list:
-            st.markdown(f"### {res['name']}")
-            st.progress(res["risk_score"])
-            st.write(f"**Verdict:** {verdict_color(res['risk_score'])}")
-            
-            # Permissions
-            st.write("**Permissions:**")
-            for p in res["permissions"]:
-                st.markdown(f"- {p}")
-
-            # Findings – Cards
-            st.write("**Findings:**")
-            for f in res["findings"]:
-                if "permission" in f:
-                    st.markdown(f"**Permission:** {f['permission']}  \n**Recommendation:** {f['ai_fix']}")
+        # Findings
+        st.subheader(" Findings")
+        findings = apk_result.get("findings", [])
+        if findings:
+            for f in findings:
+                if isinstance(f, dict):
+                    perm = f.get("permission", "")
+                    fix = f.get("ai_fix", "")
+                    st.markdown(f"<div class='card'> <b>{perm}</b><br> {fix}</div>", unsafe_allow_html=True)
                 else:
-                    st.markdown(f"{f.get('info','')}")
+                    st.markdown(f"<div class='card'> {f}</div>", unsafe_allow_html=True)
+        else:
+            st.info("No high-risk issues found ")
+
+        st.markdown("---")
+
+        # Append to summary table
+        results_table.append({
+            "App": apk_result["name"],
+            "Risk Score": score,
+            "Verdict": verdict
+        })
+
+        # Download JSON report
+        json_str = json.dumps(apk_result, indent=4)
+        b64 = base64.b64encode(json_str.encode()).decode()
+        href = f'<a href="data:file/json;base64,{b64}" download="{uploaded_file.name}_report.json">📥 Download JSON Report</a>'
+        st.markdown(href, unsafe_allow_html=True)
+
+# Summary Table
+if results_table:
+    st.subheader(" Summary Table")
+    st.dataframe(pd.DataFrame(results_table))
