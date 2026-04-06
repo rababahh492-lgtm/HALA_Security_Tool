@@ -4,3 +4,5 @@ requests==2.32.0
 androguard==3.3.5
 python-multipart>=0.0.7
 streamlit>=1.35.0
+plotly==5.18.0
+ fpdf   
