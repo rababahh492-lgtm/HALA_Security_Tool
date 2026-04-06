@@ -1,7 +1,7 @@
 import os
 from androguard.core.bytecodes.apk import APK
 
-# قائمة permissions خطرة مع توصيات
+
 DANGEROUS_PERMISSIONS = {
     "SEND_SMS": "Use runtime permission or remove if unnecessary",
     "READ_CONTACTS": "Request runtime permission only when needed",
@@ -10,7 +10,7 @@ DANGEROUS_PERMISSIONS = {
 }
 
 def scan_apk(file_path: str):
-    """تحليل APK بصمت بدون أي طباعة أو إنشاء ملفات"""
+   
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"APK file not found: {file_path}")
 
