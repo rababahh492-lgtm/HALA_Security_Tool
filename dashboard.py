@@ -5,135 +5,201 @@ from halasec_scan import scan_apk, save_reports
 import plotly.express as px
 import time
 
-# ----------- إعدادات الصفحة -----------
-st.set_page_config(
-    page_title="HALA-SCAN Dashboard",
-    page_icon="logo.png",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# ----------- PAGE STATE -----------
+if "page" not in st.session_state:
+    st.session_state.page = "landing"
 
-# ----------- ستايل CSS ----------
+# ----------- GLOBAL STYLE ----------
+st.set_page_config(page_title="HALA-SCAN", page_icon="logo.png", layout="wide")
+
 st.markdown("""
 <style>
 .stApp {
-    background: linear-gradient(135deg, #1c1c1c, #b48ddb); /* أسود إلى بنفسجي مموج */
-    color: #b48ddb; /* كل النصوص بنفسجي */
+    background: linear-gradient(140deg, #0a0a0a, #1a1a1a, #2b1f3d, #5a3ea1);
+    color: #d8cfff;
+    font-family: 'Segoe UI', sans-serif;
 }
-.stButton>button {
-    background-color: #a085d6;  /* بنفسجي جذاب */
-    color: white;
-    font-weight: bold;
+h1, h2, h3 {
+    color: #cbb6ff !important;
 }
-.stButton>button:hover {
-    background-color: #c1a3f0;
-    color: white;
+.card {
+    background: rgba(20,20,20,0.85);
+    padding: 20px;
+    border-radius: 18px;
+    margin-bottom: 20px;
+    border: 1px solid rgba(122,95,199,0.2);
+    box-shadow: 0 0 15px rgba(122,95,199,0.2);
+    transition: 0.3s;
 }
-.stTextInput>div>input, .stSelectbox>div>div>div>div {
-    background-color: #f0f0f0;
-    color: black;
-    border: 1px solid #a085d6;
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 0 30px rgba(122,95,199,0.6);
 }
-.stExpanderHeader {
-    font-weight: bold;
-    color: #b48ddb;
+.progress {
+    height: 6px;
+    border-radius: 10px;
+    background: #222;
+}
+.fill {
+    height: 100%;
+    border-radius: 10px;
+}
+.tip {
+    background: rgba(122,95,199,0.08);
+    border-left: 3px solid #7a5fc7;
+    padding: 10px;
+    margin: 6px 0;
+    border-radius: 8px;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ----------- Header ----------
-st.image("logo.png", width=150)
-st.title("HALA-SCAN Security Dashboard")
-st.subheader("Secure your mobile apps like a pro!")
+# =========================================================
+# 🎬 LANDING PAGE CINEMATIC
+# =========================================================
+if st.session_state.page == "landing":
 
-# ----------- رفع ملفات APK ----------
-uploaded_files = st.file_uploader(
-    "Upload APK files",
-    type=["apk"],
-    accept_multiple_files=True
-)
+    st.markdown("""
+    <style>
+    .center {
+        text-align: center;
+        margin-top: 120px;
+        animation: fadeIn 2s ease-in;
+    }
+    @keyframes fadeIn {
+        from {opacity:0; transform: translateY(20px);}
+        to {opacity:1; transform: translateY(0);}
+    }
+    .logo {
+        filter: drop-shadow(0 0 20px rgba(122,95,199,0.9));
+    }
+    .title {
+        font-size: 50px;
+        color: #cbb6ff;
+        margin-top: 10px;
+    }
+    .typing {
+        font-size: 18px;
+        color: #d8cfff;
+        border-right: 2px solid #cbb6ff;
+        white-space: nowrap;
+        overflow: hidden;
+        width: 0;
+        margin: auto;
+        animation: typing 3s steps(40,end) forwards, blink 0.7s infinite;
+    }
+    @keyframes typing { from {width:0} to {width:380px} }
+    @keyframes blink { 50% {border-color: transparent} }
+    </style>
 
-# ----------- مكان حفظ التقارير ----------
-REPORTS_DIR = "reports"
+    <div class="center">
+        <img src="logo.png" width="200" class="logo">
+        <div class="title">HALA-SCAN</div>
+        <div class="typing">
+        Scan your apps. Detect vulnerabilities. Stay secure.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-# ----------- DataFrame لتخزين النتائج ----------
-results_df = pd.DataFrame(columns=["APK Name", "Risk Score", "Risk Level", "Report Folder"])
-permissions_list = []
+    if st.button("🚀 Start Scanning"):
+        st.session_state.page = "dashboard"
+        st.rerun()
 
-# ----------- فحص وعرض النتائج ----------
-if uploaded_files:
-    with st.spinner("🔄 Scanning APKs… Secure your apps like a pro!"):
-        time.sleep(1)  # لتوضيح الـ spinner حتى لو سريع
-        for uploaded_file in uploaded_files:
-            temp_path = os.path.join("temp", uploaded_file.name)
-            os.makedirs("temp", exist_ok=True)
-            with open(temp_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
-            
-            apk_result, error = scan_apk(temp_path)
-            if error:
-                st.error(f"Error scanning {uploaded_file.name}: {error}")
+# =========================================================
+# 🚀 DASHBOARD
+# =========================================================
+if st.session_state.page == "dashboard":
+
+    st.image("logo.png", width=120)
+    st.title("HALA-SCAN Dashboard")
+
+    uploaded_files = st.file_uploader(
+        "Upload APK files",
+        type=["apk"],
+        accept_multiple_files=True
+    )
+
+    results = []
+    permissions_list = []
+
+    if uploaded_files:
+        with st.spinner("🔄 Scanning..."):
+            time.sleep(1)
+
+            for file in uploaded_files:
+                path = os.path.join("temp", file.name)
+                os.makedirs("temp", exist_ok=True)
+
+                with open(path, "wb") as f:
+                    f.write(file.getbuffer())
+
+                res, err = scan_apk(path)
+                if err:
+                    st.error(err)
+                    continue
+
+                save_reports(res, path)
+                results.append(res)
+
+                if "Permissions" in res:
+                    permissions_list.extend(res["Permissions"])
+
+    # ----------- RESULTS -----------
+    if results:
+        df = pd.DataFrame(results).sort_values(by="Risk Score", ascending=False)
+
+        for _, row in df.iterrows():
+            risk = row["Risk Level"]
+            score = row["Risk Score"]
+
+            if risk == "HIGH":
+                color = "#ff4d6d"
+            elif risk == "MEDIUM":
+                color = "#facc15"
             else:
-                report_folder = save_reports(apk_result, temp_path)
-                st.success(f"Scan completed: {apk_result['Risk Level']} ({apk_result['Risk Score']}/100)")
-                st.info(f"Reports saved in folder: {report_folder}")
+                color = "#4ade80"
 
-                # حفظ النتائج في DataFrame
-                results_df = pd.concat([results_df, pd.DataFrame([{
-                    "APK Name": apk_result["APK Name"],
-                    "Risk Score": apk_result["Risk Score"],
-                    "Risk Level": apk_result["Risk Level"],
-                    "Report Folder": report_folder
-                }])], ignore_index=True)
+            st.markdown(f"""
+            <div class="card">
+                <h3>📱 {row['APK Name']}</h3>
+                <p style="color:{color}; font-weight:bold;">
+                    {risk} — {score}/100
+                </p>
+                <div class="progress">
+                    <div class="fill" style="width:{score}%; background:{color};"></div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
-                # جمع Permissions
-                if "Permissions" in apk_result:
-                    permissions_list.extend(apk_result["Permissions"])
+            # Tips
+            if risk == "HIGH":
+                tips = ["Critical vulnerabilities", "Avoid risky permissions", "Do full audit"]
+            elif risk == "MEDIUM":
+                tips = ["Review permissions", "Update libs", "Monitor behavior"]
+            else:
+                tips = ["Good security", "Maintain practices", "Keep testing"]
 
-                # عرض التفاصيل
-                with st.expander(f"View full scan details for {apk_result['APK Name']}"):
-                    for k, v in apk_result.items():
-                        st.markdown(f"**{k}:** {v}")
+            for tip in tips:
+                st.markdown(f"<div class='tip'>💡 {tip}</div>", unsafe_allow_html=True)
 
-                # ----------- Dynamic Recommendations ---------
-                risk_level = apk_result["Risk Level"]
-                tips = []
-                if risk_level == "HIGH":
-                    tips = [
-                        "⚠️ High Risk: Avoid using sensitive permissions!",
-                        "🔒 Secure storage and transmission of user data is critical.",
-                        "🛡️ Conduct penetration testing before release."
-                    ]
-                elif risk_level == "MEDIUM":
-                    tips = [
-                        "⚠️ Medium Risk: Review app permissions carefully.",
-                        "🔧 Update libraries to latest versions.",
-                        "🔎 Monitor for unusual app behavior."
-                    ]
-                else:  # LOW
-                    tips = [
-                        "✅ Low Risk: Keep following best practices.",
-                        "📝 Document app changes regularly.",
-                        "🔒 Maintain secure coding standards."
-                    ]
+        # ----------- CHART -----------
+        st.markdown("---")
+        st.subheader("📊 Risk Scores")
+        st.bar_chart(df.set_index("APK Name")["Risk Score"])
 
-                st.markdown("---")
-                st.subheader(f"💡 Recommendations based on {apk_result['APK Name']} scan:")
-                for tip in tips:
-                    st.markdown(f"- {tip}")
+    # ----------- PIE -----------
+    if permissions_list:
+        st.markdown("---")
+        st.subheader("📌 Permissions")
 
-# ----------- Charts ----------
-if not results_df.empty:
-    st.markdown("---")
-    st.subheader("📊 APK Risk Scores")
-    st.bar_chart(results_df.set_index("APK Name")["Risk Score"])
+        p = pd.DataFrame(permissions_list, columns=["Permission"])
+        p = p["Permission"].value_counts().reset_index()
+        p.columns = ["Permission", "Count"]
 
-# ----------- Pie Chart للـ Permissions ----------
-if permissions_list:
-    st.markdown("---")
-    st.subheader("📌 Permissions Distribution")
-    perm_df = pd.DataFrame(permissions_list, columns=["Permission"])
-    perm_count = perm_df["Permission"].value_counts().reset_index()
-    perm_count.columns = ["Permission", "Count"]
-    fig = px.pie(perm_count, names="Permission", values="Count", color_discrete_sequence=px.colors.qualitative.Pastel)
-    st.plotly_chart(fig)
+        fig = px.pie(
+            p,
+            names="Permission",
+            values="Count",
+            color_discrete_sequence=px.colors.sequential.Purples
+        )
+        st.plotly_chart(fig)
