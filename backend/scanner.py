@@ -11,7 +11,6 @@ DANGEROUS_PERMISSIONS = {
 
 def scan_apk(file_path: str):
     """تحليل APK بصمت بدون أي طباعة أو إنشاء ملفات"""
-
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"APK file not found: {file_path}")
 
@@ -24,7 +23,6 @@ def scan_apk(file_path: str):
     findings = []
     risk_score = 0
 
-    # تحليل permissions مع تجاهل حالة الحروف
     for perm, advice in DANGEROUS_PERMISSIONS.items():
         for p in permissions:
             if perm.lower() in p.lower():
@@ -36,7 +34,6 @@ def scan_apk(file_path: str):
 
     verdict = "HIGH RISK" if risk_score >= 40 else "LOW RISK"
 
-    # رجوع البيانات مباشرة للداشبورد
     return {
         "name": os.path.basename(file_path),
         "risk_score": risk_score,
