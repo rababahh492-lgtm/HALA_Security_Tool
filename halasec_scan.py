@@ -8,13 +8,13 @@ import json
 REPORTS_DIR = "reports"
 
 def scan_apk(apk_path):
-    """تفحص APK وترجع المعلومات بدون توقف على Missing Data"""
+    
     try:
         apk = APK(apk_path)
     except Exception as e:
         return None, f"Invalid APK file: {str(e)}"
 
-    # أمان Version
+   
     try:
         version = apk.get_androidversion_name() or "Unknown"
     except KeyError:
@@ -38,7 +38,7 @@ def scan_apk(apk_path):
     return apk_info, None
 
 def save_reports(apk_info, apk_path):
-    """يحفظ التقرير بصيغ TXT، JSON، PDF"""
+    
     if not apk_info:
         return None
 
