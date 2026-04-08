@@ -10,7 +10,7 @@ DANGEROUS_PERMISSIONS = {
 }
 
 def scan_apk(file_path: str):
-   
+    
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"APK file not found: {file_path}")
 
