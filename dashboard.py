@@ -6,24 +6,24 @@ import plotly.express as px
 import subprocess
 import shutil
 
-# -------- REAL SCAN FUNCTION --------
+
 def scan_apk(path):
     try:
-        from halasec_scan import analyze_apk
+        from halasec_scan import scan_apk as analyze_apk  # alias
         res = analyze_apk(path)
         if not res:
             return None, "Failed to analyze APK"
         return {
-            "APK Name": res.get("APK Name", os.path.basename(path)),
-            "Risk Score": res.get("Risk Score", 0),
-            "Risk Level": res.get("Risk Level", "UNKNOWN"),
-            "Permissions": res.get("Permissions", []),
-            "Vulnerabilities": res.get("Vulnerabilities", [])
+            "APK Name": res.get("name", os.path.basename(path)),
+            "Risk Score": res.get("risk_score", 0),
+            "Risk Level": res.get("verdict", "UNKNOWN"),
+            "Permissions": res.get("permissions", []),
+            "Vulnerabilities": res.get("findings", [])
         }, None
     except Exception as e:
         return None, str(e)
 
-# -------- DYNAMIC-LIKE ANALYSIS (Enhanced) --------
+
 def dynamic_analysis(apk_path, timeout_sec=60):
     decoded_dir = f"temp/decoded_{os.path.basename(apk_path)}"
     if os.path.exists(decoded_dir):
@@ -63,13 +63,13 @@ def dynamic_analysis(apk_path, timeout_sec=60):
                                         break
                 except:
                     continue
-    return findings
+    return findings or [{"file": "Info", "line": "No suspicious behavior detected", "severity": "LOW"}]
 
-# -------- PAGE STATE --------
+
 if "page" not in st.session_state:
     st.session_state.page = "landing"
 
-# -------- STYLE (Original Design) --------
+
 st.set_page_config(page_title="HALA-SCAN", layout="wide")
 st.markdown("""
 <style>
@@ -83,14 +83,15 @@ h1,h2,h3{color:#cbb6ff !important;}
 .loader{border:6px solid #f3f3f3;border-top:6px solid #7a5fc7;border-radius:50%;width:60px;height:60px;animation:spin 1s linear infinite;margin:auto;margin-top:50px;}
 @keyframes spin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
 .fadein{animation: fadeIn 1.5s ease-in;}
-@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+@keyframes fadeIn{from{opacity:0;}to{opacity:1};}
 .typing{border-right:2px solid #cbb6ff; white-space: nowrap; overflow: hidden; display:inline-block; animation: typing 2s steps(40,end) forwards, blink 0.7s infinite;}
 @keyframes typing{from{width:0} to{width:380px}}
 @keyframes blink{50%{border-color:transparent}}
+.scrollable {max-height: 150px; overflow-y: auto; padding-right: 5px;}
 </style>
 """, unsafe_allow_html=True)
 
-# -------- LANDING --------
+
 if st.session_state.page == "landing":
     st.markdown("""
     <div style='text-align:center; margin-top:150px;' class='fadein'>
@@ -102,7 +103,7 @@ if st.session_state.page == "landing":
     if st.button(" Start Scanning"):
         st.session_state.page = "dashboard"
 
-# -------- DASHBOARD --------
+
 if st.session_state.page == "dashboard":
     st.image("logo.png", width=120)
     st.title("HALA-SCAN Dashboard")
@@ -130,41 +131,48 @@ if st.session_state.page == "dashboard":
                 continue
 
             findings = dynamic_analysis(path)
-
             res["findings"] = findings
             results.append(res)
             permissions_list.extend(res.get("Permissions", []))
 
         loader.empty()
 
-    # -------- CARDS --------
+    
+    def format_items(items, max_len=80):
+        if not items:
+            return "None found"
+        formatted = "<div class='scrollable'>"
+        for i in items:
+            line = i['line']
+            if len(line) > max_len:
+                line = line[:max_len] + "…"
+            formatted += f"📄 <b>{i['file']}</b> ➜ {line}<br>"
+        formatted += "</div>"
+        return formatted
+
     for app in results:
         risk = app["Risk Level"]
         score = app["Risk Score"]
         findings = app["findings"]
 
-        color = "#ff4d6d" if risk == "HIGH" else "#facc15" if risk == "MEDIUM" else "#4ade80"
+        color = "#ff4d6d" if risk.upper() == "HIGH" else "#facc15" if risk.upper() == "MEDIUM" else "#4ade80"
 
-        high = [f for f in findings if f["severity"] == "HIGH"]
-        medium = [f for f in findings if f["severity"] == "MEDIUM"]
-        low = [f for f in findings if f["severity"] == "LOW"]
-
-        def format_items(items):
-            return "<br>".join([f"📄 {i['file']} ➜ {i['line']}" for i in items]) or "None found"
+        high = [f for f in findings if f["severity"].upper() == "HIGH"]
+        medium = [f for f in findings if f["severity"].upper() == "MEDIUM"]
+        low = [f for f in findings if f["severity"].upper() == "LOW"]
 
         st.markdown(f"""
         <div class='card fadein'>
             <h3>📱 {app['APK Name']}</h3>
-            <p style='color:{color}; font-weight:bold;'>{risk} — {score}/100</p>
+            <p style='color:{color}; font-weight:bold; font-size:18px;'>{risk} — {score}/100</p>
             <div class='progress'><div class='fill' style='width:{score}%; background:{color}'></div></div>
-
             <div class='tip'><b>🔴 High Risk:</b><br>{format_items(high)}</div>
             <div class='tip'><b>🟡 Medium Risk:</b><br>{format_items(medium)}</div>
             <div class='tip'><b>🟢 Low Risk:</b><br>{format_items(low)}</div>
         </div>
         """, unsafe_allow_html=True)
 
-    # -------- CHARTS --------
+   
     if results:
         df = pd.DataFrame(results).sort_values(by="Risk Score", ascending=False)
         st.markdown("---")
