@@ -21,5 +21,5 @@ async def scan_apk_file(file: UploadFile = File(...)):
     with open(temp_path, "wb") as f:
         f.write(await file.read())
 
-    result = scan_apk(temp_path) 
+    result = scan_apk(temp_path)  
     return result
