@@ -8,3 +8,4 @@ plotly==5.18.0
  fpdf  
 pyyaml==6.1
 shutilwhich==1.1
+reportlab
