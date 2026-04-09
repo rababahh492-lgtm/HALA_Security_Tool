@@ -1,17 +1,51 @@
+
+
 import os
 from androguard.core.bytecodes.apk import APK
-import json
 
-
-DANGEROUS_PERMISSIONS = {
-    "SEND_SMS": {"risk": 30, "fix": "Use runtime permission or remove if unnecessary"},
-    "READ_CONTACTS": {"risk": 20, "fix": "Request runtime permission only when needed"},
-    "ACCESS_COARSE_LOCATION": {"risk": 15, "fix": "Request permission only when needed"},
-    "READ_PHONE_STATE": {"risk": 25, "fix": "Use temporary runtime permission"}
+# قائمة الصلاحيات الخطرة مع أوزانها
+CRITICAL_PERMISSIONS = {
+    "READ_SMS": {"weight": 45, "reason": "يقرأ رسائلك المصرفية و OTPs"},
+    "SEND_SMS": {"weight": 40, "reason": "يرسل رسائل إلى أرقام مدفوعة"},
+    "RECEIVE_SMS": {"weight": 35, "reason": "يعترض رسائل التحقق"},
+    "READ_CONTACTS": {"weight": 25, "reason": "يسرق جهات الاتصال"},
+    "CAMERA": {"weight": 15, "reason": "يصور الشاشات والمستندات"},
+    "RECORD_AUDIO": {"weight": 20, "reason": "يسجل المكالمات"},
+    "ACCESS_FINE_LOCATION": {"weight": 20, "reason": "يتتبع موقعك"},
+    "READ_PHONE_STATE": {"weight": 15, "reason": "يقرأ رقم هاتفك و IMEI"},
+    "WRITE_EXTERNAL_STORAGE": {"weight": 10, "reason": "يكتب ملفات"},
+    "SYSTEM_ALERT_WINDOW": {"weight": 30, "reason": "يعرض نوافذ فوق التطبيقات (overlay attack)"}
 }
 
+def scan_manifest_flags(apk):
+    """فحص AndroidManifest.xml"""
+    findings = []
+    try:
+        manifest = apk.get_android_manifest_xml()
+        if manifest is not None:
+            app_tag = manifest.find("application")
+            if app_tag is not None:
+                allow_backup = app_tag.get("{http://schemas.android.com/apk/res/android}allowBackup")
+                if allow_backup == "true":
+                    findings.append({
+                        "permission": "android:allowBackup=true",
+                        "risk": 25,
+                        "ai_fix": "ضعه على false في AndroidManifest.xml"
+                    })
+                
+                debuggable = app_tag.get("{http://schemas.android.com/apk/res/android}debuggable")
+                if debuggable == "true":
+                    findings.append({
+                        "permission": "android:debuggable=true",
+                        "risk": 30,
+                        "ai_fix": "أزله من إصدارات الإنتاج"
+                    })
+    except:
+        pass
+    return findings
+
 def scan_apk(file_path: str):
-    """تحليل APK (Static Analysis)"""
+    """تحليل APK"""
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"APK file not found: {file_path}")
 
@@ -24,24 +58,34 @@ def scan_apk(file_path: str):
     findings = []
     risk_score = 0
 
-    
-    for perm, data in DANGEROUS_PERMISSIONS.items():
+    # فحص الصلاحيات
+    for perm, data in CRITICAL_PERMISSIONS.items():
         for p in permissions:
             if perm.lower() in p.lower():
                 findings.append({
                     "permission": p,
-                    "risk": data["risk"],
-                    "ai_fix": data["fix"]
+                    "risk": data["weight"],
+                    "ai_fix": data["reason"]
                 })
-                risk_score += data["risk"]
+                risk_score += data["weight"]
+
+    # فحص manifest
+    manifest_findings = scan_manifest_flags(apk)
+    for f in manifest_findings:
+        findings.append(f)
+        risk_score += f["risk"]
 
     if not findings:
         findings.append({"info": "No issues found"})
 
-    
     risk_score = min(risk_score, 100)
 
-    verdict = "HIGH RISK" if risk_score >= 40 else "LOW RISK"
+    if risk_score >= 40:
+        verdict = "HIGH RISK"
+    elif risk_score >= 20:
+        verdict = "MEDIUM RISK"
+    else:
+        verdict = "LOW RISK"
 
     return {
         "name": os.path.basename(file_path),
@@ -63,18 +107,14 @@ def main(folder_path: str):
             try:
                 result = scan_apk(file_path)
                 results.append(result)
-
-               
                 print(f"Scanned: {filename} → {result['verdict']} ({result['risk_score']}/100)")
-
-            except Exception:
-                print(f"Failed to scan: {filename}")
+            except Exception as e:
+                print(f"Failed to scan: {filename} - {e}")
                 continue
 
-    
     os.makedirs("reports", exist_ok=True)
-
     
+    import json
     with open("reports/scan_results.json", "w") as f:
         json.dump(results, f, indent=4)
 
